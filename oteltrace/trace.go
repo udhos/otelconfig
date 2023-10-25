@@ -55,6 +55,8 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 
 	exporter := getEnv(me, "OTELCONFIG_EXPORTER", options.Debug)
 
+	getEnv(me, "OTEL_EXPORTER_OTLP_ENDPOINT", options.Debug) // debug only
+
 	var tp trace.TracerProvider
 	clean := func() {}
 
@@ -186,9 +188,7 @@ func createExporter(exporter string) (tracesdk.SpanExporter, error) {
 func hasServiceEnvVar(debug bool) bool {
 	const me = "hasServiceEnvVar"
 
-	svc := getEnv(me, "OTEL_SERVICE_NAME", debug)
-
-	if strings.TrimSpace(svc) != "" {
+	if svc := getEnv(me, "OTEL_SERVICE_NAME", debug); strings.TrimSpace(svc) != "" {
 		if debug {
 			log.Printf("%s: found OTEL_SERVICE_NAME='%s'", me, svc)
 		}
@@ -231,7 +231,7 @@ func tracePropagation(debug bool) {
 
 	if debug {
 		fields := prop.Fields()
-		getEnv(me, "OTEL_PROPAGATORS", debug)
+		getEnv(me, "OTEL_PROPAGATORS", debug) // debug only
 		log.Printf("%s: propagator fields: %v", me, fields)
 	}
 
