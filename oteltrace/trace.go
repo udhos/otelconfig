@@ -211,7 +211,7 @@ func tracePropagation(debug bool) {
 	if debug {
 		fields := prop.Fields()
 		slices.Sort(fields)
-		log.Printf("%s: propagators: %v", me, fields)
+		log.Printf("%s: OTEL_PROPAGATORS='%s' fields: %v", me, os.Getenv("OTEL_PROPAGATORS"), fields)
 	}
 
 	otel.SetTextMapPropagator(prop)
