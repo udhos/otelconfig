@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -29,7 +28,8 @@ const lib = "github.com/udhos/otelconfig"
 // TraceOptions provides options for TraceStart.
 type TraceOptions struct {
 	DefaultService     string
-	NoopTracerProvider bool
+	NoopTracerProvider bool // Disable tracer
+	NoopPropagator     bool // Disable propagator
 	Debug              bool
 }
 
@@ -53,11 +53,7 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 
 	const me = "TraceStart"
 
-	exporter := os.Getenv("OTELCONFIG_EXPORTER")
-
-	if options.Debug {
-		log.Printf("%s: OTELCONFIG_EXPORTER=[%s]", me, exporter)
-	}
+	exporter := getEnv(me, "OTELCONFIG_EXPORTER", options.Debug)
 
 	var tp trace.TracerProvider
 	clean := func() {}
@@ -67,7 +63,7 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 	} else {
 		p, errTracer := tracerProvider(options.DefaultService, exporter, options.Debug)
 		if errTracer != nil {
-			return nil, func() {}, errTracer
+			return nil, clean, errTracer
 		}
 		tp = p
 
@@ -88,9 +84,19 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 	// instrumentation in the future will default to using it.
 	otel.SetTracerProvider(tp)
 
-	tracePropagation(options.Debug)
+	if !options.NoopPropagator {
+		tracePropagation(options.Debug)
+	}
 
 	return tp.Tracer(lib), clean, nil
+}
+
+func getEnv(caller, key string, debug bool) string {
+	value := os.Getenv(key)
+	if debug {
+		log.Printf("%s: %s='%s'", caller, key, value)
+	}
+	return value
 }
 
 /*
@@ -118,7 +124,7 @@ func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.Trac
 	const me = "tracerProvider"
 
 	if debug {
-		log.Printf("%s: service=%s exporter=%s", me, defaultService, exporter)
+		log.Printf("%s: service='%s' exporter='%s'", me, defaultService, exporter)
 	}
 
 	// Create the Jaeger exporter
@@ -129,7 +135,7 @@ func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.Trac
 
 	var rsrc *resource.Resource
 
-	if defaultService == "" || hasServiceEnvVar() {
+	if defaultService == "" || hasServiceEnvVar(debug) {
 		rsrc = resource.NewWithAttributes(
 			semconv.SchemaURL,
 			//attribute.String("environment", environment),
@@ -159,7 +165,7 @@ func createExporter(exporter string) (tracesdk.SpanExporter, error) {
 	switch exporter {
 	case "jaeger":
 		return jaeger.New(jaeger.WithCollectorEndpoint())
-	case "grpc":
+	case "", "grpc":
 		client := otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
 		)
@@ -177,23 +183,27 @@ func createExporter(exporter string) (tracesdk.SpanExporter, error) {
 
 }
 
-func hasServiceEnvVar() bool {
+func hasServiceEnvVar(debug bool) bool {
 	const me = "hasServiceEnvVar"
 
-	svc := os.Getenv("OTEL_SERVICE_NAME")
+	svc := getEnv(me, "OTEL_SERVICE_NAME", debug)
 
 	if strings.TrimSpace(svc) != "" {
-		log.Printf("%s: found OTEL_SERVICE_NAME=%s", me, svc)
+		if debug {
+			log.Printf("%s: found OTEL_SERVICE_NAME='%s'", me, svc)
+		}
 		return true
 	}
 
-	attrs := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
+	attrs := getEnv(me, "OTEL_RESOURCE_ATTRIBUTES", debug)
 	fields := strings.FieldsFunc(attrs, func(c rune) bool { return c == ',' })
 	for _, f := range fields {
 		key, val, _ := strings.Cut(f, "=")
 		if key == "service.name" {
-			log.Printf("%s: found OTEL_RESOURCE_ATTRIBUTES: %s=%s",
-				me, key, val)
+			if debug {
+				log.Printf("%s: found OTEL_RESOURCE_ATTRIBUTES: %s='%s'",
+					me, key, val)
+			}
 			return true
 		}
 	}
@@ -221,8 +231,8 @@ func tracePropagation(debug bool) {
 
 	if debug {
 		fields := prop.Fields()
-		slices.Sort(fields)
-		log.Printf("%s: OTEL_PROPAGATORS='%s' fields: %v", me, os.Getenv("OTEL_PROPAGATORS"), fields)
+		getEnv(me, "OTEL_PROPAGATORS", debug)
+		log.Printf("%s: propagator fields: %v", me, fields)
 	}
 
 	otel.SetTextMapPropagator(prop)

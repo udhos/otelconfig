@@ -4,6 +4,10 @@
 
 # otelconfig
 
+# Example
+
+See [examples/oteltrace-example/main.go](examples/oteltrace-example/main.go).
+
 # Usage
 
 ```go
@@ -43,7 +47,6 @@ work(context.TODO(), tracer)
 func work(ctx context.Context, tracer trace.Tracer) {
 	_, span := tracer.Start(ctx, "work")
 	defer span.End()
-	time.Sleep(5 * time.Second)
 }
 
 ```
@@ -55,9 +58,20 @@ General configuration: https://opentelemetry.io/docs/concepts/sdk-configuration/
 Exporter configuration: https://opentelemetry.io/docs/concepts/sdk-configuration/otlp-exporter-configuration/
 
 ```bash
-export OTELCONFIG_EXPORTER=jaeger|grpc|http|stdout
-export OTEL_TRACES_EXPORTER=jaeger|otlp
-export OTEL_PROPAGATORS=b3multi
+export OTELCONFIG_EXPORTER=jaeger|grpc|http|stdout  ;#     Protocol    default: grpc
+export OTEL_TRACES_EXPORTER=jaeger|otlp             ;#     Data Format default: otlp
+export OTEL_PROPAGATORS=b3multi                     ;# [1] Propagator  default: tracecontext,baggage
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://host:port ;#     Endpoint    default: [2]
+
+# [1] Propagators: tracecontext,baggage,b3,b3multi,jaeger,xray,ottrace,none
+#
+# [2] Default endpoint: http://localhost:4317 for grpc
+#                       http://localhost:4318 for http
+#
+# Service name precedence from higher to lower:
+# 1. OTEL_SERVICE_NAME=mysrv
+# 2. OTEL_RESOURCE_ATTRIBUTES=service.name=mysrv
+# 3. TraceOptions.DefaultService="mysrv"
 ```
 
 Examples:
@@ -67,14 +81,17 @@ export OTELCONFIG_EXPORTER=jaeger
 export OTEL_TRACES_EXPORTER=jaeger
 export OTEL_PROPAGATORS=b3multi
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:14268
+oteltrace-example
 
 export OTELCONFIG_EXPORTER=grpc
 export OTEL_TRACES_EXPORTER=otlp
 export OTEL_PROPAGATORS=b3multi
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:4317
+oteltrace-example
 
 export OTELCONFIG_EXPORTER=http
 export OTEL_TRACES_EXPORTER=otlp
 export OTEL_PROPAGATORS=b3multi
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:4318
+oteltrace-example
 ```
