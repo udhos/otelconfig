@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -55,7 +56,7 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 
 	exporter := getEnv(me, "OTELCONFIG_EXPORTER", options.Debug)
 
-	getEnv(me, "OTEL_EXPORTER_OTLP_ENDPOINT", options.Debug) // debug only
+	otelEndpoint := getEnv(me, "OTEL_EXPORTER_OTLP_ENDPOINT", options.Debug)
 
 	var tp trace.TracerProvider
 	clean := func() {}
@@ -63,7 +64,7 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 	if options.NoopTracerProvider {
 		tp = trace.NewNoopTracerProvider()
 	} else {
-		p, errTracer := tracerProvider(options.DefaultService, exporter, options.Debug)
+		p, errTracer := tracerProvider(options.DefaultService, exporter, otelEndpoint, options.Debug)
 		if errTracer != nil {
 			return nil, clean, errTracer
 		}
@@ -121,7 +122,7 @@ Open Telemetry tracing with Gin:
 // 1. OTEL_SERVICE_NAME=mysrv
 // 2. OTEL_RESOURCE_ATTRIBUTES=service.name=mysrv
 // 3. defaultService="mysrv"
-func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.TracerProvider, error) {
+func tracerProvider(defaultService, exporter, otelEndpoint string, debug bool) (*tracesdk.TracerProvider, error) {
 
 	const me = "tracerProvider"
 
@@ -130,7 +131,7 @@ func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.Trac
 	}
 
 	// Create the Jaeger exporter
-	exp, err := createExporter(exporter)
+	exp, err := createExporter(exporter, otelEndpoint, debug)
 	if err != nil {
 		return nil, err
 	}
@@ -162,11 +163,23 @@ func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.Trac
 	return tp, nil
 }
 
-func createExporter(exporter string) (tracesdk.SpanExporter, error) {
+func createExporter(exporter, otelEndpoint string, debug bool) (tracesdk.SpanExporter, error) {
 	const me = "createExporter"
 	switch exporter {
 	case "jaeger":
-		return jaeger.New(jaeger.WithCollectorEndpoint())
+		// JaegerURL:          env.String("JAEGER_URL", "http://jaeger-collector:14268/api/traces"),
+		// exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(url)))
+		if otelEndpoint == "" {
+			return jaeger.New(jaeger.WithCollectorEndpoint())
+		}
+		jaegerEndpoint, errJoin := url.JoinPath(otelEndpoint, "/api/traces")
+		if errJoin != nil {
+			return nil, errJoin
+		}
+		if debug {
+			log.Printf("%s: jaeger endpoint: %s", me, jaegerEndpoint)
+		}
+		return jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerEndpoint)))
 	case "", "grpc":
 		client := otlptracegrpc.NewClient(
 			otlptracegrpc.WithInsecure(),
