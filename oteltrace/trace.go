@@ -26,6 +26,13 @@ import (
 
 const lib = "github.com/udhos/otelconfig"
 
+// TraceOptions provides options for TraceStart.
+type TraceOptions struct {
+	DefaultService     string
+	NoopTracerProvider bool
+	Debug              bool
+}
+
 // TraceStart initializes tracing.
 //
 // export OTELCONFIG_EXPORTER=jaeger
@@ -42,38 +49,46 @@ const lib = "github.com/udhos/otelconfig"
 // export OTEL_TRACES_EXPORTER=otlp
 // export OTEL_PROPAGATORS=b3multi
 // export OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger-collector:4318
-func TraceStart(defaultService string, debug bool) (trace.Tracer, func(), error) {
+func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 
 	const me = "TraceStart"
 
 	exporter := os.Getenv("OTELCONFIG_EXPORTER")
 
-	if debug {
+	if options.Debug {
 		log.Printf("%s: OTELCONFIG_EXPORTER=[%s]", me, exporter)
 	}
 
-	tp, errTracer := tracerProvider(defaultService, exporter, debug)
-	if errTracer != nil {
-		return nil, func() {}, errTracer
+	var tp trace.TracerProvider
+	clean := func() {}
+
+	if options.NoopTracerProvider {
+		tp = trace.NewNoopTracerProvider()
+	} else {
+		p, errTracer := tracerProvider(options.DefaultService, exporter, options.Debug)
+		if errTracer != nil {
+			return nil, func() {}, errTracer
+		}
+		tp = p
+
+		// Invoke clean to shutdown cleanly and flush telemetry when the application exits.
+		clean = func() {
+			ctx, cancel1 := context.WithCancel(context.Background())
+			defer cancel1()
+			// Do not make the application hang when it is shutdown.
+			ctx2, cancel2 := context.WithTimeout(ctx, time.Second*5)
+			defer cancel2()
+			if err := p.Shutdown(ctx2); err != nil {
+				log.Fatalf("trace shutdown: %v", err)
+			}
+		}
 	}
 
 	// Register our TracerProvider as the global so any imported
 	// instrumentation in the future will default to using it.
 	otel.SetTracerProvider(tp)
 
-	// Invoke clean to shutdown cleanly and flush telemetry when the application exits.
-	clean := func() {
-		ctx, cancel1 := context.WithCancel(context.Background())
-		defer cancel1()
-		// Do not make the application hang when it is shutdown.
-		ctx2, cancel2 := context.WithTimeout(ctx, time.Second*5)
-		defer cancel2()
-		if err := tp.Shutdown(ctx2); err != nil {
-			log.Fatalf("trace shutdown: %v", err)
-		}
-	}
-
-	tracePropagation(debug)
+	tracePropagation(options.Debug)
 
 	return tp.Tracer(lib), clean, nil
 }
@@ -129,17 +144,13 @@ func tracerProvider(defaultService, exporter string, debug bool) (*tracesdk.Trac
 		)
 	}
 
-	// Register the trace exporter with a TracerProvider, using a batch
-	// span processor to aggregate spans before export.
-	bsp := tracesdk.NewBatchSpanProcessor(exp)
-
 	tp := tracesdk.NewTracerProvider(
 		// Always be sure to batch in production.
 		tracesdk.WithBatcher(exp),
 		// Record information about this application in a Resource.
 		tracesdk.WithResource(rsrc),
-		tracesdk.WithSpanProcessor(bsp),
 	)
+
 	return tp, nil
 }
 
