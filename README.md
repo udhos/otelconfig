@@ -4,6 +4,8 @@
 
 # otelconfig
 
+[otelconfig](https://github.com/udhos/otelconfig) provides a helper to quickly initialize OpenTelemetry tracing for a Go application. Then one can use standard OTEL_ env vars to customize tracing behavior.
+
 # Example
 
 See [examples/oteltrace-example/main.go](examples/oteltrace-example/main.go).
