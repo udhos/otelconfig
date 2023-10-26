@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -52,8 +53,9 @@ func main() {
 }
 
 func work(ctx context.Context, i int, tracer trace.Tracer) {
-	_, span := tracer.Start(ctx, "work")
+	me := fmt.Sprintf("work %d", i)
+	_, span := tracer.Start(ctx, me)
 	defer span.End()
-	log.Printf("%d: work: working", i)
+	log.Printf("%s: working", me)
 	time.Sleep(200 * time.Millisecond)
 }
