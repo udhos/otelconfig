@@ -39,6 +39,10 @@ func main() {
 		tracer = tr
 	}
 
+	//
+	// do the work, create spans to record it
+	//
+
 	ctx, span := tracer.Start(context.TODO(), "main")
 	defer span.End()
 
