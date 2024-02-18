@@ -22,6 +22,7 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 const lib = "github.com/udhos/otelconfig"
@@ -32,6 +33,11 @@ type TraceOptions struct {
 	NoopTracerProvider bool // Disable tracer
 	NoopPropagator     bool // Disable propagator
 	Debug              bool
+}
+
+// NewNoopTracer creates a No-Op Tracer.
+func NewNoopTracer() trace.Tracer {
+	return noop.Tracer{}
 }
 
 // TraceStart initializes tracing.
@@ -67,7 +73,7 @@ func TraceStart(options TraceOptions) (trace.Tracer, func(), error) {
 	clean := func() {}
 
 	if options.NoopTracerProvider {
-		tp = trace.NewNoopTracerProvider()
+		tp = noop.NewTracerProvider()
 	} else {
 		p, errTracer := tracerProvider(options.DefaultService, exporter, otelEndpoint, options.Debug)
 		if errTracer != nil {

@@ -16,13 +16,20 @@ See [examples/oteltrace-example/main.go](examples/oteltrace-example/main.go).
 import "github.com/udhos/otelconfig/oteltrace"
 import "go.opentelemetry.io/otel/trace"
 
+// NOOP env var disables tracing
+noopEnv := os.Getenv("NOOP")
+noop := noopEnv != ""
+log.Printf("NOOP=%s noop=%t", noopEnv, noop)
+
 //
 // initialize tracing
 //
 
 var tracer trace.Tracer
 
-{
+if noop {
+    tracer = oteltrace.NewNoopTracer()
+} else {
     options := oteltrace.TraceOptions{
         DefaultService:     "my-program",
         NoopTracerProvider: false,

@@ -16,13 +16,20 @@ import (
 func main() {
 	me := filepath.Base(os.Args[0])
 
+	// NOOP env var disables tracing
+	noopEnv := os.Getenv("NOOP")
+	noop := noopEnv != ""
+	log.Printf("NOOP=%s noop=%t", noopEnv, noop)
+
 	//
 	// initialize tracing
 	//
 
 	var tracer trace.Tracer
 
-	{
+	if noop {
+		tracer = oteltrace.NewNoopTracer()
+	} else {
 		options := oteltrace.TraceOptions{
 			DefaultService:     me,
 			NoopTracerProvider: false,
