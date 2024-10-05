@@ -16,10 +16,9 @@ import (
 func main() {
 	me := filepath.Base(os.Args[0])
 
-	// NOOP env var disables tracing
-	noopEnv := os.Getenv("NOOP")
-	noop := noopEnv != ""
-	log.Printf("NOOP=%s noop=%t", noopEnv, noop)
+	noop := envBool("NOOP", false) // NOOP env var disables tracing
+	interval := envDuration("INTERVAL", 200*time.Millisecond)
+	repeat := envInt("REPEAT", 10)
 
 	//
 	// initialize tracing
@@ -54,15 +53,15 @@ func main() {
 	ctx, span := tracer.Start(context.TODO(), "main")
 	defer span.End()
 
-	for i := 0; i < 10; i++ {
-		work(ctx, i, tracer)
+	for i := 0; i < repeat; i++ {
+		work(ctx, i+1, repeat, tracer, interval)
 	}
 }
 
-func work(ctx context.Context, i int, tracer trace.Tracer) {
-	me := fmt.Sprintf("work %d", i)
+func work(ctx context.Context, i, repeat int, tracer trace.Tracer, interval time.Duration) {
+	me := fmt.Sprintf("work %d/%d", i, repeat)
 	_, span := tracer.Start(ctx, me)
 	defer span.End()
 	log.Printf("%s: working", me)
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(interval)
 }
