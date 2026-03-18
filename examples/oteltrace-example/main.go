@@ -53,7 +53,7 @@ func main() {
 	ctx, span := tracer.Start(context.TODO(), "main")
 	defer span.End()
 
-	for i := 0; i < repeat; i++ {
+	for i := range repeat {
 		work(ctx, i+1, repeat, tracer, interval)
 	}
 }
